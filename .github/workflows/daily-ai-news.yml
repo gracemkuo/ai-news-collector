@@ -2,7 +2,7 @@ name: Daily AI News Collector
 
 on:
   schedule:
-    - cron: '0 4 * * *'  # 每天台北時間早上8點執行
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
 jobs:
@@ -19,6 +19,14 @@ jobs:
       with:
         python-version: '3.11'
     
+    # 👇 下載之前的資料檔案
+    - name: Download previous data
+      uses: actions/download-artifact@v3
+      with:
+        name: ai-news-data
+        path: .
+      continue-on-error: true  # 第一次沒有檔案時不會失敗
+    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -30,3 +38,13 @@ jobs:
         GMAIL_USER: ${{ secrets.GMAIL_USER }}
         GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       run: python ai_news_collector.py
+    
+    # 👇 上傳更新後的資料檔案
+    - name: Upload updated data
+      uses: actions/upload-artifact@v3
+      with:
+        name: ai-news-data
+        path: |
+          ai_news_data.csv
+          collector.log
+        retention-days: 365  # 保留1年
