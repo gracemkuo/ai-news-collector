@@ -1,14 +1,14 @@
-name: Daily AI News Collector (Optimized)
+name: Daily AI News Collector
 
 on:
   schedule:
-    - cron: '0 4 * * *'  # 每天台北時間12:00 (UTC+8)
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
 jobs:
   collect-and-send:
     runs-on: ubuntu-latest
-    timeout-minutes: 25  # 縮短到25分鐘
+    timeout-minutes: 30
     
     steps:
     - name: Checkout code
@@ -18,89 +18,34 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-        cache: 'pip'  # 快取pip依賴
     
-    # 嘗試下載之前的資料，失敗就忽略
-    - name: Download previous data
+    # 👇 簡單版本：總是嘗試下載，失敗就忽略
+    - name: Try to download previous data
       uses: actions/download-artifact@v4
       with:
         name: ai-news-data
         path: .
-      continue-on-error: true
+      continue-on-error: true  # 失敗也沒關係
     
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    # 新增：檢查現有資料狀態
-    - name: Check existing data
-      run: |
-        if [ -f "ai_news_data.csv" ]; then
-          echo "找到現有資料檔案"
-          wc -l ai_news_data.csv
-          tail -5 ai_news_data.csv || true
-        else
-          echo "沒有找到現有資料檔案，將建立新檔案"
-        fi
-    
-    # 設定更嚴格的超時限制
     - name: Run AI news collector
-      timeout-minutes: 20  # 程式本身限制20分鐘
       env:
         CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
         GMAIL_USER: ${{ secrets.GMAIL_USER }}
         GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-      run: |
-        echo "開始執行AI新聞收集..."
-        python ai_news_collector.py
-        echo "收集完成，檢查結果..."
-        if [ -f "ai_news_data.csv" ]; then
-          echo "資料檔案大小: $(wc -l < ai_news_data.csv) 行"
-        fi
+      run: python ai_news_collector.py
     
-    # 新增：記錄執行狀態
-    - name: Log execution status
-      if: always()
-      run: |
-        echo "=== 執行摘要 ==="
-        echo "時間: $(date)"
-        echo "工作目錄內容:"
-        ls -la
-        if [ -f "ai_news_data.csv" ]; then
-          echo "CSV檔案行數: $(wc -l < ai_news_data.csv)"
-          echo "最後5行資料:"
-          tail -5 ai_news_data.csv || true
-        fi
-        if [ -f "collector.log" ]; then
-          echo "日誌檔案最後20行:"
-          tail -20 collector.log || true
-        fi
-    
-    # 上傳資料以供下次使用
-    - name: Upload data for next run
-      if: always()
+    - name: Upload data for next time
+      if: always()  # 即使前面步驟失敗也要上傳
       uses: actions/upload-artifact@v4
       with:
         name: ai-news-data
         path: |
           ai_news_data.csv
-          *.log
-        retention-days: 30  # 減少到30天
+          collector.log
+        retention-days: 90
         overwrite: true
-    
-    # 新增：失敗時的除錯資訊
-    - name: Debug on failure
-      if: failure()
-      run: |
-        echo "=== 除錯資訊 ==="
-        echo "Python版本:"
-        python --version
-        echo "已安裝套件:"
-        pip list
-        echo "環境變數 (部分):"
-        env | grep -E "(CLAUDE|GMAIL)" | sed 's/=.*/=***/'
-        echo "磁碟空間:"
-        df -h
-        echo "記憶體使用:"
-        free -h
