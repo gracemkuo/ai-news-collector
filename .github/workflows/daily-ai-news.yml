@@ -19,13 +19,13 @@ jobs:
       with:
         python-version: '3.11'
     
-    # 👇 使用v4版本 - 新的語法
-    - name: Download previous data
+    # 👇 簡單版本：總是嘗試下載，失敗就忽略
+    - name: Try to download previous data
       uses: actions/download-artifact@v4
       with:
         name: ai-news-data
         path: .
-      continue-on-error: true  # 第一次沒有檔案時不會失敗
+      continue-on-error: true  # 失敗也沒關係
     
     - name: Install dependencies
       run: |
@@ -39,13 +39,13 @@ jobs:
         GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       run: python ai_news_collector.py
     
-    # 👇 使用v4版本 - 新的語法
-    - name: Upload updated data
+    - name: Upload data for next time
+      if: always()  # 即使前面步驟失敗也要上傳
       uses: actions/upload-artifact@v4
       with:
         name: ai-news-data
         path: |
           ai_news_data.csv
           collector.log
-        retention-days: 365
-        overwrite: true  # v4新功能：覆蓋同名artifacts
+        retention-days: 90
+        overwrite: true
