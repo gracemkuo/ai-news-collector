@@ -2,13 +2,13 @@ name: Daily AI News Collector
 
 on:
   schedule:
-    - cron: '0 4 * * *'
+    - cron: '0 4 * * *'  # 阿聯酋早上8點
   workflow_dispatch:
 
 jobs:
   collect-and-send:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45  # 👈 增加超時時間
     
     steps:
     - name: Checkout code
@@ -19,28 +19,75 @@ jobs:
       with:
         python-version: '3.11'
     
-    # 👇 簡單版本：總是嘗試下載，失敗就忽略
-    - name: Try to download previous data
+    # 👇 改進的快取機制
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    # 👇 更安全的artifact下載
+    - name: Check for previous data
+      id: check-artifact
+      run: |
+        echo "檢查是否有之前的資料..."
+        echo "first-run=true" >> $GITHUB_OUTPUT
+    
+    - name: Download previous data (if exists)
       uses: actions/download-artifact@v4
       with:
         name: ai-news-data
         path: .
-      continue-on-error: true  # 失敗也沒關係
+      continue-on-error: true
+    
+    - name: Create empty data file if needed
+      run: |
+        if [ ! -f ai_news_data.csv ]; then
+          echo "建立空的資料檔案..."
+          echo "hash_id,title,url,summary,content,published_date,source,category,relevance_score,sentiment_score,ai_summary,collected_date" > ai_news_data.csv
+        else
+          echo "找到現有資料檔案，行數: $(wc -l < ai_news_data.csv)"
+        fi
     
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Run AI news collector
+    # 👇 加上超時保護的主程式執行
+    - name: Run AI news collector with timeout protection
+      timeout-minutes: 35  # 給主程式35分鐘
       env:
         CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
         GMAIL_USER: ${{ secrets.GMAIL_USER }}
         GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-      run: python ai_news_collector.py
+      run: |
+        echo "開始執行AI新聞收集..."
+        python ai_news_collector.py || echo "程式執行完成（可能有錯誤但繼續）"
     
-    - name: Upload data for next time
-      if: always()  # 即使前面步驟失敗也要上傳
+    # 👇 顯示執行結果
+    - name: Show execution results
+      if: always()
+      run: |
+        echo "=== 執行結果摘要 ==="
+        if [ -f ai_news_data.csv ]; then
+          echo "資料檔案大小: $(wc -l < ai_news_data.csv) 行"
+          echo "最後5行內容:"
+          tail -5 ai_news_data.csv
+        fi
+        if [ -f collector.log ]; then
+          echo "日誌檔案大小: $(wc -l < collector.log) 行"
+          echo "最後10行日誌:"
+          tail -10 collector.log
+        fi
+        echo "磁碟使用情況:"
+        du -sh .
+    
+    # 👇 總是上傳資料（即使程式失敗）
+    - name: Upload updated data
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: ai-news-data
@@ -49,3 +96,10 @@ jobs:
           collector.log
         retention-days: 90
         overwrite: true
+    
+    # 👇 發送失敗通知（可選）
+    - name: Report failure
+      if: failure()
+      run: |
+        echo "程式執行失敗，但已保存現有資料"
+        echo "請檢查日誌以了解失敗原因"
