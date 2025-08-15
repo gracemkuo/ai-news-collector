@@ -1,14 +1,14 @@
-name: Daily AI News Collector
+name: Daily AI News Collector (Optimized)
 
 on:
   schedule:
-    - cron: '0 4 * * *'  # 阿聯酋早上8點
+    - cron: '0 4 * * *'  # 每天台北時間12:00 (UTC+8)
   workflow_dispatch:
 
 jobs:
   collect-and-send:
     runs-on: ubuntu-latest
-    timeout-minutes: 45  # 👈 增加超時時間
+    timeout-minutes: 25  # 縮短到25分鐘
     
     steps:
     - name: Checkout code
@@ -18,88 +18,89 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
+        cache: 'pip'  # 快取pip依賴
     
-    # 👇 改進的快取機制
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-    
-    # 👇 更安全的artifact下載
-    - name: Check for previous data
-      id: check-artifact
-      run: |
-        echo "檢查是否有之前的資料..."
-        echo "first-run=true" >> $GITHUB_OUTPUT
-    
-    - name: Download previous data (if exists)
+    # 嘗試下載之前的資料，失敗就忽略
+    - name: Download previous data
       uses: actions/download-artifact@v4
       with:
         name: ai-news-data
         path: .
       continue-on-error: true
     
-    - name: Create empty data file if needed
-      run: |
-        if [ ! -f ai_news_data.csv ]; then
-          echo "建立空的資料檔案..."
-          echo "hash_id,title,url,summary,content,published_date,source,category,relevance_score,sentiment_score,ai_summary,collected_date" > ai_news_data.csv
-        else
-          echo "找到現有資料檔案，行數: $(wc -l < ai_news_data.csv)"
-        fi
-    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    # 👇 加上超時保護的主程式執行
-    - name: Run AI news collector with timeout protection
-      timeout-minutes: 35  # 給主程式35分鐘
+    # 新增：檢查現有資料狀態
+    - name: Check existing data
+      run: |
+        if [ -f "ai_news_data.csv" ]; then
+          echo "找到現有資料檔案"
+          wc -l ai_news_data.csv
+          tail -5 ai_news_data.csv || true
+        else
+          echo "沒有找到現有資料檔案，將建立新檔案"
+        fi
+    
+    # 設定更嚴格的超時限制
+    - name: Run AI news collector
+      timeout-minutes: 20  # 程式本身限制20分鐘
       env:
         CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
         GMAIL_USER: ${{ secrets.GMAIL_USER }}
         GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       run: |
         echo "開始執行AI新聞收集..."
-        python ai_news_collector.py || echo "程式執行完成（可能有錯誤但繼續）"
+        python ai_news_collector.py
+        echo "收集完成，檢查結果..."
+        if [ -f "ai_news_data.csv" ]; then
+          echo "資料檔案大小: $(wc -l < ai_news_data.csv) 行"
+        fi
     
-    # 👇 顯示執行結果
-    - name: Show execution results
+    # 新增：記錄執行狀態
+    - name: Log execution status
       if: always()
       run: |
-        echo "=== 執行結果摘要 ==="
-        if [ -f ai_news_data.csv ]; then
-          echo "資料檔案大小: $(wc -l < ai_news_data.csv) 行"
-          echo "最後5行內容:"
-          tail -5 ai_news_data.csv
+        echo "=== 執行摘要 ==="
+        echo "時間: $(date)"
+        echo "工作目錄內容:"
+        ls -la
+        if [ -f "ai_news_data.csv" ]; then
+          echo "CSV檔案行數: $(wc -l < ai_news_data.csv)"
+          echo "最後5行資料:"
+          tail -5 ai_news_data.csv || true
         fi
-        if [ -f collector.log ]; then
-          echo "日誌檔案大小: $(wc -l < collector.log) 行"
-          echo "最後10行日誌:"
-          tail -10 collector.log
+        if [ -f "collector.log" ]; then
+          echo "日誌檔案最後20行:"
+          tail -20 collector.log || true
         fi
-        echo "磁碟使用情況:"
-        du -sh .
     
-    # 👇 總是上傳資料（即使程式失敗）
-    - name: Upload updated data
+    # 上傳資料以供下次使用
+    - name: Upload data for next run
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: ai-news-data
         path: |
           ai_news_data.csv
-          collector.log
-        retention-days: 90
+          *.log
+        retention-days: 30  # 減少到30天
         overwrite: true
     
-    # 👇 發送失敗通知（可選）
-    - name: Report failure
+    # 新增：失敗時的除錯資訊
+    - name: Debug on failure
       if: failure()
       run: |
-        echo "程式執行失敗，但已保存現有資料"
-        echo "請檢查日誌以了解失敗原因"
+        echo "=== 除錯資訊 ==="
+        echo "Python版本:"
+        python --version
+        echo "已安裝套件:"
+        pip list
+        echo "環境變數 (部分):"
+        env | grep -E "(CLAUDE|GMAIL)" | sed 's/=.*/=***/'
+        echo "磁碟空間:"
+        df -h
+        echo "記憶體使用:"
+        free -h
