@@ -96,12 +96,19 @@ class DataManager:
         """根據日期取得文章"""
         try:
             df = pd.read_csv(self.csv_file)
-            df['published_date'] = pd.to_datetime(df['published_date'])
+            # 👇 改善日期解析
+            df['published_date'] = pd.to_datetime(df['published_date'], errors='coerce', format='mixed')
             target_date = pd.to_datetime(date)
+            
+            # 移除無法解析的日期
+            df = df.dropna(subset=['published_date'])
             
             filtered_df = df[df['published_date'].dt.date == target_date.date()]
             return filtered_df.to_dict('records')
         except (FileNotFoundError, pd.errors.EmptyDataError):
+            return []
+        except Exception as e:
+            logger.error(f"取得文章時發生錯誤: {e}")
             return []
 
 class RSSCollector:
@@ -278,7 +285,7 @@ class ClaudeProcessor:
             """
             
             data = {
-                "model": "claude-3-sonnet-20240229",  # 使用更強的模型生成更好的摘要
+                "model": "claude-3-5-sonnet-20241022",  # 使用更強的模型生成更好的摘要
                 "max_tokens": 800,  # 增加token數量支援更長摘要
                 "messages": [
                     {

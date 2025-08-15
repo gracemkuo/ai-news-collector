@@ -267,7 +267,7 @@ class TestClaudeProcessor:
             """
             
             data = {
-                "model": "claude-3-haiku-20240307",  # 使用較便宜的模型測試
+                "model": "claude-3-5-sonnet-20241022",  # 使用較便宜的模型測試
                 "max_tokens": 500,
                 "messages": [{"role": "user", "content": prompt}]
             }
