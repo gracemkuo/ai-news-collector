@@ -1,0 +1,4 @@
+hash_id,title,url,summary,content,published_date,source,category,relevance_score,sentiment_score,ai_summary,collected_date
+sample1,OpenAI發布ChatGPT-5：突破性AI模型的新里程碑,https://example.com/chatgpt5,OpenAI今日宣布推出ChatGPT-5，這是該公司迄今為止最先進的語言模型...,,2025-08-14T15:53:52.604158,OpenAI Blog,AI Research,0.95,0.8,OpenAI發布了新一代ChatGPT-5模型，在推理能力和多模態處理上有重大突破。,2025-08-14T15:53:52.604164
+sample2,AI輔助藥物發現：DeepMind在蛋白質結構預測上的新進展,https://example.com/protein-folding,DeepMind的AlphaFold技術在藥物發現領域取得新突破...,,2025-08-13T15:53:52.604165,DeepMind Blog,Biotech,0.88,0.6,DeepMind利用AI技術在蛋白質結構預測上取得突破，有助於加速新藥開發。,2025-08-14T15:53:52.604168
+sample3,Tesla機器人Optimus開始商業化部署,https://example.com/tesla-robot,Tesla宣布其人形機器人Optimus將開始在工廠環境中進行商業化測試...,,2025-08-12T15:53:52.604169,TechCrunch AI,Robotics,0.82,0.4,Tesla的人形機器人Optimus開始商業化測試，標誌著機器人技術的重要進展。,2025-08-14T15:53:52.604169
